@@ -10,7 +10,10 @@
   },
   "dependencies": {
     "next": "^13.5.6",
+    "next-auth": "^4.23.1",
+    "package.json": "^2.0.1",
     "preline": "^1.9.0",
+    "prettier": "^3.1.0",
     "react": "^18",
     "react-dom": "^18"
   },
@@ -24,5 +27,13 @@
     "postcss": "^8",
     "tailwindcss": "^3.3.0",
     "typescript": "^5"
+  },
+  "prettier": {
+    "trailingComma": "all",
+    "tabWidth": 2,
+    "semi": true,
+    "singleQuote": true,
+    "jsxSingleQuote": true,
+    "printWidth": 120
   }
 }
