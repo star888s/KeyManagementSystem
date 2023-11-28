@@ -10,6 +10,7 @@ const handler = NextAuth({
       checks: 'nonce',
     }),
   ],
+  secret: process.env.SECRET,
 });
 
 export { handler as GET, handler as POST };
