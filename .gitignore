@@ -1,0 +1,7 @@
+web/amplify.yml
+
+# cypress
+web/cypress/fixtures/example.json
+web/cypress/screenshots/*
+web/cypress.config.ts
+

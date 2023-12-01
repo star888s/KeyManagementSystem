@@ -1,3 +1,36 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer components {
+  .btn {
+    @apply font-bold py-2 px-4 rounded;
+  }
+  .btn-blue {
+    @apply bg-blue-500 text-white;
+  }
+  .btn-blue:hover {
+    @apply bg-blue-700;
+  }
+}
+
+html,
+body {
+  font-size: 2.667vw;
+}
+
+/* タブレットサイズ以降（768px以上） */
+@media screen and (min-width: 768px) {
+  html,
+  body {
+    font-size: min(2.667vw, 14px);
+  }
+}
+
+/* PCサイズ（1024px以上） */
+@media screen and (min-width: 1024px) {
+  html,
+  body {
+    font-size: min(2.667vw, 16px);
+  }
+}
