@@ -5,3 +5,12 @@ web/cypress/fixtures/example.json
 web/cypress/screenshots/*
 web/cypress.config.ts
 
+.aws
+
+sesame.txt
+test.py
+python/
+requirement.txt
+server/.local/*
+.DS_Store
+.DS_Store
