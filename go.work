@@ -1,0 +1,6 @@
+go 1.21.6
+
+use (
+	./server/lambda/create_schedule/cmd
+	./server/lambda/key_operation/cmd
+)

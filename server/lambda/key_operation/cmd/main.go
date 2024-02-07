@@ -13,7 +13,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"reflect"
 	"time"
 
 	"github.com/aws/aws-lambda-go/lambda"
@@ -27,18 +26,13 @@ import (
 func main() {
 
 	lambda.Start(Handler)
-	// info := &roomInfo{}
-	// err := info.GetInfo("test")
-	// if err != nil{
-	// 	slog.Error("err: %s",err)
-	// 	slog.Error("Failed to retrieve data from dynamo")
-	// 	// return "Key was not toggled" ,errors.New("Failed to retrieve data from dynamo")
+
 	}
 
 
 type MyEvent struct {
 	ID string `json:"id"`
-	Action bool `json:"action"`
+	Action string `json:"action"`
 }
 
 type roomInfo struct {
@@ -85,15 +79,8 @@ func (i roomInfo)GetInfo(id string) (roomInfo, error){
 		slog.Error("Failed to GetItem")
 	}
 
-	// fmt.Println(reflect.TypeOf(res))
-	// fmt.Println(res)
+	slog.Info("Succeed get item","Response : %s",res.Item)
 
-	fmt.Println(reflect.TypeOf(res.Item))
-	fmt.Println(res.Item)
-
-// 	if val, ok := res.Item[""]; ok {
-// 		fmt.Printf("foo exists. The value is %#v", val)
-// }
 	name := res.Item["name"].(*types.AttributeValueMemberS).Value
 	uuid := res.Item["uuid"].(*types.AttributeValueMemberS).Value
 	secretKey := res.Item["secretKey"].(*types.AttributeValueMemberS).Value
@@ -102,7 +89,6 @@ func (i roomInfo)GetInfo(id string) (roomInfo, error){
 	i.name = name
 	i.uuid = uuid
 	i.secretKey = secretKey
-	fmt.Println(i)
 	
 	return i ,nil
 }
@@ -110,25 +96,25 @@ func (i roomInfo)GetInfo(id string) (roomInfo, error){
 
 // KeyAccess
 type Sesame interface {
-	toggleKey(info *roomInfo,Action bool, apiKey string)(string, error)
+	toggleKey(info *roomInfo,Action string, apiKey string)(string, error)
 }
 
-func (roomInfo)toggleKey(info *roomInfo,Action bool, apiKey string)(string, error){
+func (roomInfo)toggleKey(info *roomInfo,Action string)(string, error){
 	// fernet暗号化とかは後日検討
 	// 88/82/83 = toggle/lock/unlock
 	var cmd int
 	var status string
 
-	if Action == true {
+	if Action == "close" {
 		status = "closed"
-		cmd = 83
+		cmd = 82
 	} else {
 		status = "opened"
-		cmd = 82
+		cmd = 83
 	}
 
-	// env
-	history := "regular exe"
+	history := "Automatic"
+
 	base64History := base64.StdEncoding.EncodeToString([]byte(history))
 
 	slog.Info("create history","history", base64History)
@@ -153,10 +139,16 @@ func (roomInfo)toggleKey(info *roomInfo,Action bool, apiKey string)(string, erro
 	m := cm.Sum(nil)
 	signature := hex.EncodeToString(m)
 
-	slog.Info("create signature", "signature: %s", signature)
+	slog.Info("create signature:", "signature: %s", signature)
 
-	//　env
-	url := fmt.Sprintf("https://app.candyhouse.co/api/sesame2/%s/cmd", info.uuid)
+	baseUrl,err2 := os.LookupEnv("URL")
+	if err2!= true {
+		slog.Error("error","status",err2)
+		slog.Error("URL is not defined")
+		return "Key was not toggled" ,errors.New("URL is not defined")
+	}
+
+	url := fmt.Sprintf(baseUrl, info.uuid)
 
 	body := map[string]interface{}{
 		"cmd":     cmd,
@@ -173,6 +165,13 @@ func (roomInfo)toggleKey(info *roomInfo,Action bool, apiKey string)(string, erro
 		return "", errors.New("Failed to create request")
 	}
 
+	apiKey,err2 := os.LookupEnv("APIKEY")
+	if err2!= true {
+		slog.Error("error","status",err2)
+		slog.Error("Api key is not defined")
+		return "Key was not toggled" ,errors.New("Api key is not defined")
+	}
+
 	headers := map[string]string{
 		"x-api-key": apiKey,
 	}
@@ -184,7 +183,7 @@ func (roomInfo)toggleKey(info *roomInfo,Action bool, apiKey string)(string, erro
 	client := &http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
-		slog.Error("err: %s",err)
+		slog.Error("err: ",err)
 		slog.Error("Failed to http request")
 		return "", errors.New("Failed to create request")
 	}
@@ -210,17 +209,8 @@ func Handler(ctx context.Context, event MyEvent) (string,error) {
 		slog.Error("Failed to retrieve data from dynamo")
 		return "Key was not toggled" ,errors.New("Failed to retrieve data from dynamo")
 	}
-	fmt.Println(i)
-	fmt.Println(&i)
 
-	apiKey,err2 := os.LookupEnv("APIKEY")
-	if err2!= true {
-		slog.Error("error","status",err2)
-		slog.Error("Api key is not defined")
-		return "Key was not toggled" ,errors.New("Api key is not defined")
-	}
-
-	status,err := info.toggleKey(&i,event.Action,apiKey)
+	status,err := info.toggleKey(&i,event.Action)
 	if err != nil {
 		slog.Error("status: %b",err)
 		slog.Error("Failed to toggle key")

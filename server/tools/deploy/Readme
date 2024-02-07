@@ -1,8 +1,8 @@
-docker exec -t terraform_env-terraform-1 /bin/bash
+docker exec -it deploy-terraform-1 /bin/bash
 
 aws-vault --backend=file add default
 
-aws-vault --backend=file exec default -- terraform init
+aws-vault --backend=file exec dev -- terraform init
 
 
 TODO
