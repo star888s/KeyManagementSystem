@@ -15,3 +15,5 @@ server/.local/*
 .DS_Store
 server/.terraform/*
 server/.terraform.lock.hcl
+*/main_test.go
+test.txt

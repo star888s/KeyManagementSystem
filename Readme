@@ -103,3 +103,6 @@ go
 カバレッジ取得
   go test -coverprofile=coverage.out ./...
   go tool cover -html=coverage.out -o coverage.html
+
+workapace　追加
+  go work use server/lambda/..

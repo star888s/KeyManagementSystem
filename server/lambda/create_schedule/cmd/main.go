@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -18,6 +19,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/google/uuid"
 )
+
+//scheduleの命名規則を変える+timestampを追加する
 
 func HandleRequest(ctx context.Context, event events.DynamoDBEvent) (string, error) {
 
@@ -131,8 +134,10 @@ func createRule(id string ,flg string, name string, time string) {
     }
     // 文字列"cron"にconvertCeronを埋めこみ、変数にする
     cron := fmt.Sprintf("cron(%s)", convertedCron)
+
+    fmtTime := strings.ReplaceAll(time, ":", "_")
     
-    ruleName := flg + "-" + name
+    ruleName := flg + "-" + name + "-" + fmtTime
 
     ruleInput := &eventbridge.PutRuleInput{
         Name:               aws.String(ruleName),

@@ -8,7 +8,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.26.5
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.27.0
 	github.com/chmike/cmac-go v1.1.0
-	go.uber.org/mock v0.4.0
 )
 
 require (
