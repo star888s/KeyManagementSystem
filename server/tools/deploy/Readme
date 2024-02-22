@@ -1,0 +1,16 @@
+docker exec -it deploy-terraform-1 /bin/bash
+
+aws-vault --backend=file add default
+
+aws-vault --backend=file exec dev -- terraform init
+
+
+TODO
+
+mfa認証の設定　プロフィール　assume role 周り
+→金かかるからやめる
+
+resourse exploerとlambdaとか絡めてサービスのビューを監視する
+
+
+aws-vault --backend=file exec default -- terraform import aws_budgets_budget.zero 175890438119:My Zero-Spend Budget

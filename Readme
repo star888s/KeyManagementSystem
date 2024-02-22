@@ -1,0 +1,108 @@
+構成図
+
+.
+├── server
+│   ├── config.tf
+│   ├── lambda
+│   │   └── key_operation
+│   │       ├── archive
+│   │       │   ├── bootstrap.zip
+│   │       │   └── main.zip
+│   │       ├── build
+│   │       │   ├── bootstrap
+│   │       │   └── main
+│   │       └── cmd
+│   │           ├── coverage.html
+│   │           ├── coverage.out
+│   │           ├── go.mod
+│   │           ├── go.sum
+│   │           ├── main.go
+│   │           └── main_test.go
+│   ├── lambda_key_operation.tf
+│   ├── policies
+│   │   ├── lambda-assume-role.json
+│   │   └── lambda-policy.json
+│   └── tools
+│       ├── deploy
+│       │   ├── Dockerfile
+│       │   ├── Readme
+│       │   └── docker-compose.yml
+│       └── go
+│           └── docker-compose.yml
+└── web
+    ├── README.md
+    ├── __tests__
+    │   └── AuthButton.test.js
+    ├── amplify.yml
+    ├── app
+    │   ├── api
+    │   │   └── auth
+    │   │       └── [...nextauth]
+    │   │           └── route.tsx
+    │   ├── components
+    │   │   └── AuthButton.tsx
+    │   ├── dashbord
+    │   │   └── page.tsx
+    │   ├── globals.css
+    │   ├── layout.tsx
+    │   ├── page.tsx
+    │   └── providers
+    │       └── NextAuth.tsx
+    ├── coverage
+    │   ├── clover.xml
+    │   ├── coverage-final.json
+    │   ├── lcov-report
+    │   │   ├── AuthButton.tsx.html
+    │   │   ├── app
+    │   │   │   ├── components
+    │   │   │   │   ├── AuthButton.tsx.html
+    │   │   │   │   └── index.html
+    │   │   │   ├── index.html
+    │   │   │   └── page.tsx.html
+    │   │   ├── base.css
+    │   │   ├── block-navigation.js
+    │   │   ├── favicon.png
+    │   │   ├── index.html
+    │   │   ├── prettify.css
+    │   │   ├── prettify.js
+    │   │   ├── sort-arrow-sprite.png
+    │   │   └── sorter.js
+    │   └── lcov.info
+    ├── cypress
+    │   ├── downloads
+    │   ├── e2e
+    │   │   └── app.cy.js
+    │   ├── fixtures
+    │   │   └── example.json
+    │   ├── screenshots
+    │   │   └── app.cy.js
+    │   └── support
+    │       ├── commands.ts
+    │       └── e2e.ts
+    ├── cypress.config.ts
+    ├── global.d.ts
+    ├── jest.config.mjs
+    ├── next-env.d.ts
+    ├── next.config.js
+    ├── node_modules
+    ├── package-lock.json
+    ├── package.json
+    ├── postcss.config.js
+    ├── tailwind.config.ts
+    └── tsconfig.json
+
+
+go 
+
+モジュール取得
+  go mod tidy
+
+テスト実施　全テスト実施
+  go test ./...
+
+カバレッジ取得
+  go test -coverprofile=coverage.out ./...
+  go tool cover -html=coverage.out -o coverage.html
+
+workapace　追加
+  go work use server/lambda/..

@@ -1,0 +1,10 @@
+go 1.21.6
+
+use (
+	./server/lambda/create_schedule/cmd
+	./server/lambda/delete_schedule/cmd
+	./server/lambda/delete_schedule_api/cmd
+	./server/lambda/get_schedule_api/cmd
+	./server/lambda/key_operation/cmd
+	./server/lambda/upsert_schedule_api/cmd
+)

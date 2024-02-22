@@ -5,3 +5,16 @@ web/cypress/fixtures/example.json
 web/cypress/screenshots/*
 web/cypress.config.ts
 
+.aws
+
+sesame.txt
+test.py
+python/
+requirement.txt
+server/.local/*
+.DS_Store
+server/.terraform/*
+server/.terraform.lock.hcl
+*/main_test.go
+test.txt
+samplesk.json
