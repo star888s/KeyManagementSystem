@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -20,45 +21,82 @@ import (
 	"github.com/google/uuid"
 )
 
-//scheduleの命名規則を変える+timestampを追加する
+type Event struct {
+    Invoked
+    Stream
+}
 
-func HandleRequest(ctx context.Context, event events.DynamoDBEvent) (string, error) {
+type Invoked struct {
+    ID string `json:"ID"`
+}
 
-    slog.Info("event: ","%s",event)
+type Stream events.DynamoDBEvent
+
+func HandleRequest(ctx context.Context, event Event) (string, error) {
 
     slog.Info("start lambda function")
+
+    slog.Info("event: ","%s",event)
 
     //文字列を複数持つ配列を定義する
     var pkList []string
 
-    for _, record := range event.Records {
-        if record.EventName == "REMOVE"{
-            //削除された場合は処理をスキップする
-            slog.Info("skip remove event")
-            continue
+    switch {
+    case !reflect.DeepEqual(event.Invoked, Invoked{}):
+
+        slog.Info("invoked: ","%s",event)
+
+        pkList = append(pkList, event.ID)
+
+    case !reflect.DeepEqual(event.Stream, events.DynamoDBEvent{}):
+        slog.Info("stream: ","%s",event)
+
+        for _, record := range event.Records {
+            if record.EventName == "REMOVE"{
+                //削除された場合は処理をスキップする
+                slog.Info("skip remove event")
+                continue
+            }
+
+            keys := record.Change.Keys
+            slog.Info("keys: ","%s", keys)
+            key := keys["id"].String()
+
+            //pkListにkeyを追加するすでにある場合は追加しない
+            if !contains(pkList, key) {
+                pkList = append(pkList, key)
+            }
         }
 
-        keys := record.Change.Keys
-        slog.Info("keys: ","%s", keys)
-        key := keys["id"].String()
-
-        //pkListにkeyを追加するすでにある場合は追加しない
-        if !contains(pkList, key) {
-            pkList = append(pkList, key)
-        }
+    default:
+        slog.Info("event: ","%s",event)
+        slog.Info("event: ","%s",reflect.TypeOf(event))
+        slog.Error("unknown event")
+        return "", fmt.Errorf("unknown event")
     }
 
     slog.Info("pkList: ","%s", pkList)
 
+    if len(pkList) == 0 {
+        slog.Info("No items found")
+        return "No items found", nil
+    }
+
     //ppkLisyのサイズ分だけループするして、getScheduleを実行する
     for _, pk := range pkList {
         
-        schedule := getSchedule(pk)
+        schedule,err := getSchedule(pk)
+        if err != nil {
+            slog.Error(err.Error())
+            return "", err
+        }
         //scheduleの中身を確認する
         slog.Info("schedule: ","%s", schedule)
         scheduled := schedule["scheduled"].(*types.AttributeValueMemberBOOL).Value
 
-        if scheduled == false {
+        slog.Info("scheduled: ","%b", scheduled)
+
+        if !scheduled {
             id := schedule["id"].(*types.AttributeValueMemberS).Value
             name := schedule["name"].(*types.AttributeValueMemberS).Value
             startTime := schedule["startTime"].(*types.AttributeValueMemberS).Value
@@ -76,7 +114,7 @@ func main() {
     lambda.Start(HandleRequest)
 }
 
-func getSchedule(pk string) (map[string]types.AttributeValue){
+func getSchedule(pk string) (map[string]types.AttributeValue,error){
     cfg, err := config.LoadDefaultConfig(context.TODO())
     if err != nil {
         slog.Error(err.Error())
@@ -101,18 +139,19 @@ func getSchedule(pk string) (map[string]types.AttributeValue){
 
 
     resp, err := svc.Query(context.TODO(), params)
-        if err != nil {
-            slog.Error(err.Error())
+    if err != nil {
+        slog.Error(err.Error())
+        return nil, err
     }
 
     if len(resp.Items) > 0 {
         itemString := fmt.Sprintf("%v", resp.Items[0])
         slog.Info(itemString)
-        return resp.Items[0]
+        return resp.Items[0], nil
     } else {
         slog.Error("No items found")
+        return nil, fmt.Errorf("No items found")
     }
-    return nil
     }
 
 // eventbridge schedulerに変更する
@@ -136,6 +175,8 @@ func createRule(id string ,flg string, name string, time string) {
     cron := fmt.Sprintf("cron(%s)", convertedCron)
 
     fmtTime := strings.ReplaceAll(time, ":", "_")
+    //fmttimeの末尾のタイムゾーンを削除する
+    fmtTime = fmtTime[:len(fmtTime)-6]
     
     ruleName := flg + "-" + name + "-" + fmtTime
 
@@ -168,6 +209,7 @@ func createRule(id string ,flg string, name string, time string) {
     event := map[string]interface{}{
         "id":     id,
         "action": action,
+        "sk":     time,
     }
     slog.Info("event: ","%s", event)
 
@@ -228,8 +270,6 @@ func createRule(id string ,flg string, name string, time string) {
     }
 
     slog.Info("Successfully created one-time scheduled rule")
-
-    return
 }
 
 func convertISO8601ToCron(t string) (string, error) {
