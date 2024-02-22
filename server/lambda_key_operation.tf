@@ -12,6 +12,7 @@ resource "aws_lambda_function" "key_operation" {
       "APIKEY" = jsondecode(file(".local/api.json")).apiKey
       "URL"    = "https://app.candyhouse.co/api/sesame2/%s/cmd"
       "TZ"     = "Asia/Tokyo"
+      "ARN"    = jsondecode(file(".local/arn.json")).arn_create_schedule
     }
   }
 

@@ -19,6 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	v2Lambda "github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/chmike/cmac-go"
 )
@@ -217,7 +218,41 @@ func Handler(ctx context.Context, event MyEvent) (string,error) {
 		return "Key was not toggled" ,errors.New("Failed to toggle key")
 	}
 
+	InvokeLambda(event.ID)
+
 	slog.Info(status)
 
 	return status, nil
+}
+
+type SendEvent struct {
+		ID string
+}
+
+func InvokeLambda(id string) (error) {
+
+	payload := SendEvent{
+		ID:   id,
+	}
+	jsonBytes, _ := json.Marshal(payload)
+
+	cfg, err := config.LoadDefaultConfig(context.TODO())
+	if err != nil {
+		return err
+	}
+
+	client := v2Lambda.NewFromConfig(cfg)
+
+	// 環境変数からARNを取得する
+	arn, _ := os.LookupEnv("ARN")
+
+	input := &v2Lambda.InvokeInput{
+		FunctionName:   aws.String(arn),
+		Payload:        jsonBytes,
+	}
+
+	resp, _ := client.Invoke(context.TODO(), input)
+	slog.Info("Succeed invoke lambda", "Response: %s", resp)
+
+			return nil
 }
