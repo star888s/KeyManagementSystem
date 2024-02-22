@@ -55,3 +55,13 @@ resource "aws_cloudwatch_log_group" "upsert_schedule_api_log_group" {
   name              = "/aws/lambda/upsert_schedule_api"
   retention_in_days = 1
 }
+
+
+resource "aws_lambda_permission" "upsert_schedule_api_permisson" {
+  statement_id  = "AllowExecutionFromAPIGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.upsert_schedule_api.arn
+  principal     = "apigateway.amazonaws.com"
+
+  source_arn = "${aws_api_gateway_rest_api.kms_api.execution_arn}/*/POST/upsert_schedule"
+}
