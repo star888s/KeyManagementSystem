@@ -125,6 +125,9 @@ func deleteRules(ctx context.Context, ruleNames []string) error {
 	client := eventbridge.NewFromConfig(cfg)
 
 	for _, ruleName := range ruleNames {
+			if ruleName == "invoke_delete_schedule" {
+				continue
+		}
 			// Get the targets for the rule
 			targetsOutput, err := client.ListTargetsByRule(ctx, &eventbridge.ListTargetsByRuleInput{
 					Rule: &ruleName,
@@ -189,7 +192,12 @@ func deleteDynamoSchedule() error{
 	}
 
 	// 現在の時間を取得します
-	now := time.Now()
+	now := time.Now().Format(time.RFC3339)
+
+	fmtNow, err := time.Parse(time.RFC3339, now)
+	if err != nil {
+			return err
+	}
 
 	// 各項目のIDとStartTimeを取得します
 	for _, item := range scanOutput.Items {
@@ -206,7 +214,7 @@ func deleteDynamoSchedule() error{
 			}
 
 			// StartTimeが現在時刻より過去であれば項目を削除します
-			if startTime.Before(now) {
+			if startTime.Before(fmtNow) {
 					deleteInput := &dynamodb.DeleteItemInput{
 							TableName: &tableName,
 							Key: map[string]types.AttributeValue{
