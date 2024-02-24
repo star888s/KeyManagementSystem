@@ -29,10 +29,18 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
 
     var bodys Bodys
 
+    corsHeaders := map[string]string{
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin":  request.Headers["origin"],
+        "Access-Control-Allow-Methods": "POST,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+    }
+
     err := json.Unmarshal([]byte(request.Body), &bodys)
     if err != nil {
         fmt.Println("Could not decode body", err)
         return Response{
+            Headers: corsHeaders,
             Body:       err.Error(),
             StatusCode: 400,
         }, nil
@@ -42,15 +50,16 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
     err = validateBody(bodys)
     if err != nil {
         return Response{
+            Headers: corsHeaders,
             Body:       err.Error(),
             StatusCode: 400,
         }, nil
-        
     }
 
     err = deleteItem(ctx, bodys)
     if err != nil {
         return Response{
+            Headers: corsHeaders,
             Body:       err.Error(),
             StatusCode: 400,
         }, nil
@@ -60,9 +69,7 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
         StatusCode:      200,
         IsBase64Encoded: false,
         Body:            "Request processed successfully",
-        Headers: map[string]string{
-            "Content-Type": "application/json",
-        },
+        Headers: corsHeaders,
     }
 
     return response, nil

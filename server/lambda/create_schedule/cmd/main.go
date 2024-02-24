@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -52,11 +51,11 @@ func HandleRequest(ctx context.Context, event Event) (string, error) {
         slog.Info("stream: ","%s",event)
 
         for _, record := range event.Records {
-            if record.EventName == "REMOVE"{
-                //削除された場合は処理をスキップする
-                slog.Info("skip remove event")
-                continue
-            }
+            // if record.EventName == "REMOVE"{
+            //     //削除された場合は処理をスキップする
+            //     slog.Info("skip remove event")
+            //     continue
+            // }
 
             keys := record.Change.Keys
             slog.Info("keys: ","%s", keys)
@@ -82,29 +81,59 @@ func HandleRequest(ctx context.Context, event Event) (string, error) {
         return "No items found", nil
     }
 
-    //ppkLisyのサイズ分だけループするして、getScheduleを実行する
+    //pkLisのサイズ分だけループして、getScheduleを実行する
     for _, pk := range pkList {
         
-        schedule,err := getSchedule(pk)
+        scheduleItems,err := getSchedule(pk)
         if err != nil {
             slog.Error(err.Error())
             return "", err
         }
-        //scheduleの中身を確認する
-        slog.Info("schedule: ","%s", schedule)
-        scheduled := schedule["scheduled"].(*types.AttributeValueMemberBOOL).Value
+        if len(scheduleItems) != 0 {
+            schedule := scheduleItems[0]
+            //scheduleの中身を確認する
+            slog.Info("schedule: ","%s", schedule)
+            slog.Info("Schedulevalues: ","%s", schedule["startTime"].(*types.AttributeValueMemberS).Value)
+            scheduled := schedule["scheduled"].(*types.AttributeValueMemberS).Value
+            slog.Info("scheduled: ","%b", scheduled)
+            
+        }
 
-        slog.Info("scheduled: ","%b", scheduled)
+        newestSchedule,err := getNewestSchedule(pk)
+        if err != nil {
+            slog.Error(err.Error())
+            return "", err
+        }
+        
+        //newestScheduleの中身を確認する
+        slog.Info("newestSchedule: ","%s", newestSchedule)
+        slog.Info("newestSchedulevalues: ","%s", newestSchedule["startTime"].(*types.AttributeValueMemberS).Value)
+        newestScheduleFlg := newestSchedule["scheduled"].(*types.AttributeValueMemberS).Value
+        slog.Info("newestScheduleFlg: ","%b", newestScheduleFlg)
 
-        if !scheduled {
-            id := schedule["id"].(*types.AttributeValueMemberS).Value
-            name := schedule["name"].(*types.AttributeValueMemberS).Value
-            startTime := schedule["startTime"].(*types.AttributeValueMemberS).Value
-            endTime := schedule["endTime"].(*types.AttributeValueMemberS).Value
-            createRule(id,"start", name, startTime)
-            createRule(id,"end", name, endTime)
-            updateFlagTrue(pk,startTime)
-        }  
+        id := newestSchedule["id"].(*types.AttributeValueMemberS).Value
+        name := newestSchedule["name"].(*types.AttributeValueMemberS).Value
+        startTime := newestSchedule["startTime"].(*types.AttributeValueMemberS).Value
+        endTime := newestSchedule["endTime"].(*types.AttributeValueMemberS).Value
+        
+        //scheduleとnewestScheduleの内容が異なる==最新のものがtrueになっていない==イベントを上書きする必要がある
+        if len(scheduleItems) == 1 && !reflect.DeepEqual(scheduleItems[0], newestSchedule){
+            createRule(id, "start", name, startTime)
+            createRule(id, "end", name, endTime)
+            updateFlagTrue(pk, startTime)
+
+            oldPk := scheduleItems[0]["id"].(*types.AttributeValueMemberS).Value
+            oldSK :=scheduleItems[0]["startTime"].(*types.AttributeValueMemberS).Value
+            updateSchedule(oldPk, oldSK)
+
+        }else if len(scheduleItems) == 0 {
+            createRule(id, "start", name, startTime)
+            createRule(id, "end", name, endTime)
+            updateFlagTrue(pk, startTime)
+
+        }else{
+            slog.Error("No need update schedule")
+        }
     }
 
     return "Successfully create schedule", nil
@@ -114,7 +143,10 @@ func main() {
     lambda.Start(HandleRequest)
 }
 
-func getSchedule(pk string) (map[string]types.AttributeValue,error){
+func getSchedule(pk string) ([]map[string]types.AttributeValue,error){
+
+    slog.Info("start getSchedule")
+
     cfg, err := config.LoadDefaultConfig(context.TODO())
     if err != nil {
         slog.Error(err.Error())
@@ -128,10 +160,11 @@ func getSchedule(pk string) (map[string]types.AttributeValue,error){
 
     params := &dynamodb.QueryInput{
         TableName: aws.String("ScheduleInfo"),
-        KeyConditionExpression: aws.String("id = :id AND startTime >= :now"),
+        IndexName: aws.String("id-scheduled-index"),
+        KeyConditionExpression: aws.String("id = :id AND scheduled = :scheduled"),
         ExpressionAttributeValues: map[string]types.AttributeValue{
-            ":id": &types.AttributeValueMemberS{Value: pk},
-            ":now": &types.AttributeValueMemberS{Value: now},
+            ":id":        &types.AttributeValueMemberS{Value: pk},
+            ":scheduled": &types.AttributeValueMemberS{Value: "true"},
         },
         ScanIndexForward: aws.Bool(true),
         Limit:            aws.Int32(1),
@@ -144,6 +177,44 @@ func getSchedule(pk string) (map[string]types.AttributeValue,error){
         return nil, err
     }
 
+    slog.Info("resp: ","%s", resp)
+
+    return resp.Items, nil
+    }
+
+func getNewestSchedule(pk string) (map[string]types.AttributeValue,error){
+
+    slog.Info("start getNewestSchedule")
+
+    cfg, err := config.LoadDefaultConfig(context.TODO())
+    if err != nil {
+        slog.Error(err.Error())
+    }
+    
+    svc := dynamodb.NewFromConfig(cfg)
+    
+    now := time.Now().Format(time.RFC3339)
+        
+    slog.Info("now: ","%s", now)
+    
+    params := &dynamodb.QueryInput{
+        TableName: aws.String("ScheduleInfo"),
+        KeyConditionExpression: aws.String("id = :id AND startTime >= :now"),
+        ExpressionAttributeValues: map[string]types.AttributeValue{
+            ":id": &types.AttributeValueMemberS{Value: pk},
+            ":now": &types.AttributeValueMemberS{Value: now},
+        },
+        ScanIndexForward: aws.Bool(true),
+        Limit:            aws.Int32(1), 
+    }
+    
+    
+    resp, err := svc.Query(context.TODO(), params)
+    if err != nil {
+        slog.Error(err.Error())
+        return nil, err
+    }
+    
     if len(resp.Items) > 0 {
         itemString := fmt.Sprintf("%v", resp.Items[0])
         slog.Info(itemString)
@@ -152,7 +223,42 @@ func getSchedule(pk string) (map[string]types.AttributeValue,error){
         slog.Error("No items found")
         return nil, fmt.Errorf("No items found")
     }
+}
+
+func updateSchedule(pk string, sk string) error {
+    cfg, err := config.LoadDefaultConfig(context.TODO())
+    if err != nil {
+        slog.Error(err.Error())
+        return err
     }
+
+    svc := dynamodb.NewFromConfig(cfg)
+
+    params := &dynamodb.UpdateItemInput{
+        TableName: aws.String("ScheduleInfo"),
+        Key: map[string]types.AttributeValue{
+            "id":        &types.AttributeValueMemberS{Value: pk},
+            "startTime": &types.AttributeValueMemberS{Value: sk},
+        },
+        ExpressionAttributeNames: map[string]string{
+            "#S": "scheduled",
+        },
+        ExpressionAttributeValues: map[string]types.AttributeValue{
+            ":s": &types.AttributeValueMemberS{Value: "false"},
+        },
+        UpdateExpression: aws.String("SET #S = :s"),
+        ReturnValues:     types.ReturnValueUpdatedNew,
+    }
+
+    _, err = svc.UpdateItem(context.TODO(), params)
+    if err != nil {
+        slog.Error(err.Error())
+        return err
+    }
+
+    slog.Info("Successfully updated schedule")
+    return nil
+}
 
 // eventbridge schedulerに変更する
 func createRule(id string ,flg string, name string, time string) {
@@ -173,12 +279,18 @@ func createRule(id string ,flg string, name string, time string) {
     }
     // 文字列"cron"にconvertCeronを埋めこみ、変数にする
     cron := fmt.Sprintf("cron(%s)", convertedCron)
-
-    fmtTime := strings.ReplaceAll(time, ":", "_")
-    //fmttimeの末尾のタイムゾーンを削除する
-    fmtTime = fmtTime[:len(fmtTime)-6]
     
-    ruleName := flg + "-" + name + "-" + fmtTime
+    ruleName := flg + "-" + name
+
+    // Delete existing rule with the same name
+    deleteRuleInput := &eventbridge.DeleteRuleInput{
+        Name: aws.String(ruleName),
+    }
+    _, err = client.DeleteRule(context.TODO(), deleteRuleInput)
+    if err != nil {
+        slog.Error(err.Error())
+        // Continue even if the rule does not exist
+    }
 
     ruleInput := &eventbridge.PutRuleInput{
         Name:               aws.String(ruleName),
@@ -316,7 +428,7 @@ func updateFlagTrue(pk string, sk string) error {
             "#F": "scheduled",
         },
         ExpressionAttributeValues: map[string]types.AttributeValue{
-            ":f": &types.AttributeValueMemberBOOL{Value: true},
+            ":f": &types.AttributeValueMemberS{Value: "true"},
         },
         TableName: aws.String("ScheduleInfo"),
         Key: map[string]types.AttributeValue{

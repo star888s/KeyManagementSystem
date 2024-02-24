@@ -33,9 +33,17 @@ type body struct {
  
 func HandleRequest(request events.APIGatewayProxyRequest) (Response, error) {
 
+    corsHeaders := map[string]string{
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin":  request.Headers["origin"],
+        "Access-Control-Allow-Methods": "GET,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+    }
+
     list,err := getAllSchedule()
     if err != nil {
         return Response{
+            Headers: corsHeaders,
             Body:       err.Error(),
             StatusCode: 400,
         }, nil
@@ -49,12 +57,14 @@ func HandleRequest(request events.APIGatewayProxyRequest) (Response, error) {
     bodyJson, err := json.Marshal(body)
     if err != nil {
         return Response{
+            Headers: corsHeaders,
             Body:       err.Error(),
             StatusCode: 400,
         }, nil
     }
     
     response := Response{
+        Headers: corsHeaders,
         StatusCode:      200,
         Body:            string(bodyJson),
     }
