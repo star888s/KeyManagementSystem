@@ -23,6 +23,7 @@
         "events:PutTargets",
         "events:RemoveTargets",
         "events:ListTargetsByRule",
+        "events:DeleteRule",
         "iam:PassRole"
       ],
       "Effect": "Allow",
