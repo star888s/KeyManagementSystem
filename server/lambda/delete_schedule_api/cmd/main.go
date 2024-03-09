@@ -123,16 +123,16 @@ func validateBody(bodys Bodys) error {
         if body.StartTime == "" {
             return errors.New("startTime is required")
         }
-        startTime, err := time.Parse(time.RFC3339, body.StartTime)
+        _, err := time.Parse(time.RFC3339, body.StartTime)
         if err != nil {
             return errors.New("startTime must be a valid datetime string in RFC3339 format")
         }
-        FStartTime, _ := time.Parse("2006-01-02 15:04:05", startTime.Format("2006-01-02 15:04:05"))
-        currentTime := time.Now().Add(3 * time.Minute)
-        FCurrentTime, _ := time.Parse("2006-01-02 15:04:05", currentTime.Format("2006-01-02 15:04:05"))
-        if FStartTime.Before(FCurrentTime) {
-            return errors.New("startTime must be at least 3 minutes in the future")
-        }
+        // FStartTime, _ := time.Parse("2006-01-02 15:04:05", startTime.Format("2006-01-02 15:04:05"))
+        // currentTime := time.Now().Add(3 * time.Minute)
+        // FCurrentTime, _ := time.Parse("2006-01-02 15:04:05", currentTime.Format("2006-01-02 15:04:05"))
+        // if FStartTime.Before(FCurrentTime) {
+        //     return errors.New("startTime must be at least 3 minutes in the future")
+        // }
 }
  
     return nil
