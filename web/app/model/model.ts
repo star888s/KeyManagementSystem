@@ -5,6 +5,7 @@ export interface Schedule {
   memo: string;
   name: string;
 }
+// フラグを追加、選ばせる
 
 export interface Info {
   id: string;

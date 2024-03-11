@@ -40,6 +40,7 @@ func HandleRequest(ctx context.Context, event Event) (string, error) {
     //文字列を複数持つ配列を定義する
     var pkList []string
 
+    // trigger元によって処理を分岐する
     switch {
     case !reflect.DeepEqual(event.Invoked, Invoked{}):
 
@@ -50,18 +51,14 @@ func HandleRequest(ctx context.Context, event Event) (string, error) {
     case !reflect.DeepEqual(event.Stream, events.DynamoDBEvent{}):
         slog.Info("stream: ","%s",event)
 
+        // streamイベントが配列のためループかつ重複の排除を行う
         for _, record := range event.Records {
-            // if record.EventName == "REMOVE"{
-            //     //削除された場合は処理をスキップする
-            //     slog.Info("skip remove event")
-            //     continue
-            // }
 
             keys := record.Change.Keys
             slog.Info("keys: ","%s", keys)
             key := keys["id"].String()
 
-            //pkListにkeyを追加するすでにある場合は追加しない
+            //pkListにkeyを追加する、すでにある場合は追加しない
             if !contains(pkList, key) {
                 pkList = append(pkList, key)
             }
@@ -84,6 +81,7 @@ func HandleRequest(ctx context.Context, event Event) (string, error) {
     //pkLisのサイズ分だけループして、getScheduleを実行する
     for _, pk := range pkList {
         
+        // イベント生成済みのスケジュールを取得する
         scheduleItems,err := getSchedule(pk)
         if err != nil {
             slog.Error(err.Error())
@@ -91,7 +89,6 @@ func HandleRequest(ctx context.Context, event Event) (string, error) {
         }
         if len(scheduleItems) != 0 {
             schedule := scheduleItems[0]
-            //scheduleの中身を確認する
             slog.Info("schedule: ","%s", schedule)
             slog.Info("Schedulevalues: ","%s", schedule["startTime"].(*types.AttributeValueMemberS).Value)
             scheduled := schedule["scheduled"].(*types.AttributeValueMemberS).Value
@@ -99,6 +96,7 @@ func HandleRequest(ctx context.Context, event Event) (string, error) {
             
         }
 
+        // 最新のスケジュールを取得する
         newestSchedule,err := getNewestSchedule(pk)
         if err != nil {
             slog.Error(err.Error())
@@ -116,8 +114,8 @@ func HandleRequest(ctx context.Context, event Event) (string, error) {
         startTime := newestSchedule["startTime"].(*types.AttributeValueMemberS).Value
         endTime := newestSchedule["endTime"].(*types.AttributeValueMemberS).Value
         
-        //scheduleとnewestScheduleの内容が異なる==最新のものがtrueになっていない==イベントを上書きする必要がある
-        if len(scheduleItems) == 1 && !reflect.DeepEqual(scheduleItems[0], newestSchedule){
+        //scheduleとnewestScheduleの内容が異なる場合==>最新のものがtrueになっていない==>イベントを上書きする必要がある かつ繰り返しでないことも条件に追加
+        if len(scheduleItems) == 1 && !reflect.DeepEqual(scheduleItems[0], newestSchedule) && scheduleItems[0]["repetition"].(*types.AttributeValueMemberS).Value == "false"{
             createRule(id, "start", name, startTime)
             createRule(id, "end", name, endTime)
             updateFlagTrue(pk, startTime)
@@ -126,6 +124,11 @@ func HandleRequest(ctx context.Context, event Event) (string, error) {
             oldSK :=scheduleItems[0]["startTime"].(*types.AttributeValueMemberS).Value
             updateSchedule(oldPk, oldSK)
 
+        // 繰り返しスケジュールの場合
+        }else if len(scheduleItems) == 1 && scheduleItems[0]["repetition"].(*types.AttributeValueMemberS).Value == "true" {
+            createRepRule(id, "start", name, startTime)
+            createRepRule(id, "end", name, endTime)
+  
         }else if len(scheduleItems) == 0 {
             createRule(id, "start", name, startTime)
             createRule(id, "end", name, endTime)
@@ -260,8 +263,131 @@ func updateSchedule(pk string, sk string) error {
     return nil
 }
 
-// eventbridge schedulerに変更する
 func createRule(id string ,flg string, name string, time string) {
+
+    slog.Info("start createRule")
+
+    cfg, err := config.LoadDefaultConfig(context.TODO())
+    if err != nil {
+        slog.Error(err.Error())
+    }
+
+    client := eventbridge.NewFromConfig(cfg)
+
+    convertedCron, err := convertISO8601ToCron(time)
+    if err != nil {
+        slog.Error(err.Error())
+        return
+    }
+    // 文字列"cron"にconvertCeronを埋めこみ、変数にする
+    cron := fmt.Sprintf("cron(%s)", convertedCron)
+    
+    ruleName := flg + "-" + name
+
+    // Delete existing rule with the same name
+    deleteRuleInput := &eventbridge.DeleteRuleInput{
+        Name: aws.String(ruleName),
+    }
+    _, err = client.DeleteRule(context.TODO(), deleteRuleInput)
+    if err != nil {
+        slog.Error(err.Error())
+        // Continue even if the rule does not exist
+    }
+
+    ruleInput := &eventbridge.PutRuleInput{
+        Name:               aws.String(ruleName),
+        ScheduleExpression: aws.String(cron),
+        State:              eventTypes.RuleStateEnabled,
+    }
+
+    _, err = client.PutRule(context.TODO(), ruleInput)
+    if err != nil {
+        slog.Error(err.Error())
+        return
+    }
+
+    //環境変数ARNを取得する
+    arn,_ := os.LookupEnv("ARN")
+
+    //UUIDを生成する
+    uuid, _ := uuid.NewRandom()
+
+    var action string
+
+    if flg == "end" {
+        action = "close"
+    } else {
+        action = "open"
+    }
+
+    event := map[string]interface{}{
+        "id":     id,
+        "action": action,
+        "sk":     time,
+    }
+    slog.Info("event: ","%s", event)
+
+    jsonEvent, err := json.Marshal(event)
+    if err != nil {
+        slog.Error(err.Error())
+        return
+    }
+
+    //targetがある場合はすべて削除する
+    deleteTargetsInput := &eventbridge.ListTargetsByRuleInput{
+        Rule: aws.String(ruleName),
+    }
+
+    targetsOutput, err := client.ListTargetsByRule(context.TODO(), deleteTargetsInput)
+    if err != nil {
+        slog.Error(err.Error())
+        return
+    }
+
+    if len(targetsOutput.Targets) > 0 {
+        var targetIds []string
+        for _, target := range targetsOutput.Targets {
+            targetIds = append(targetIds, *target.Id)
+        }
+        
+        removeTargetsInput := &eventbridge.RemoveTargetsInput{
+            Rule: aws.String(ruleName),
+            Ids: targetIds,
+        }
+        
+        _, err = client.RemoveTargets(context.TODO(), removeTargetsInput)     
+        
+        if err != nil {
+            slog.Error(err.Error())
+            return
+        }
+    }
+
+
+    targets := []eventTypes.Target{
+        {
+            Arn:   aws.String(arn),
+            Id:    aws.String(uuid.String()),
+            Input: aws.String(string(jsonEvent)),
+        },
+    }
+
+    targetsInput := &eventbridge.PutTargetsInput{
+        Rule:    aws.String(ruleName),
+        Targets: targets,
+    }
+
+    _, err = client.PutTargets(context.TODO(), targetsInput)
+    if err != nil {
+        slog.Error(err.Error())
+        return
+    }
+
+    slog.Info("Successfully created one-time scheduled rule")
+}
+
+// ここから作業する
+func createRepRule(id string ,flg string, name string, time string) {
 
     slog.Info("start createRule")
 

@@ -78,6 +78,7 @@ func HandleRequest(ctx context.Context, request events.APIGatewayProxyRequest) (
             StatusCode: 400,
         }, nil
     }
+    // bodyのパラメータで処理をスイッチする
 
     err = upsertItem(ctx, body)
     if err != nil {
@@ -107,6 +108,7 @@ func main() {
 }
 
 
+// 送られてくるパラメータによってscheduledをfalseにするかrepetitionをtrueにするかなどを判断する
 func upsertItem(ctx context.Context, body Body) error {
     cfg, err := config.LoadDefaultConfig(ctx)
     if err != nil {
@@ -236,6 +238,12 @@ func checkCondition(ctx context.Context,body Body) (bool, error) {
            (dbStartTimeParsed.After(bodyStartTimeParsed) && dbEndTimeParsed.Before(bodyEndTimeParsed)) {
             return false, nil
         }
+        // if文
+        // db日時のrepetitionがtrueの場合は
+        // db日付を曜日に変換
+        // body日付を曜日に変換
+        // if文
+        // 双方の曜日が等しいものは上記と同様の条件の時刻版で比較する
     }
 
     return true, nil
