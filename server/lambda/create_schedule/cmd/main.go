@@ -33,6 +33,8 @@ type Stream events.DynamoDBEvent
 
 func HandleRequest(ctx context.Context, event Event) (string, error) {
 
+    slog.Info(os.Getenv("AWS_ENDPOINT_URL"))
+
     slog.Info("start lambda function")
 
     slog.Info("event: ","%s",event)
@@ -521,7 +523,7 @@ func convertISO8601ToCron(t string) (string, error) {
 
     parsedTime = parsedTime.Add(-9 * time.Hour)
 
-    cron := fmt.Sprintf("%d %d %d %d ? %d", parsedTime.Minute(), parsedTime.Hour(), parsedTime.Day(), parsedTime.Month(), parsedTime.Year())
+    cron := fmt.Sprintf("0 %d %d ? * %d *", parsedTime.Minute(), parsedTime.Hour(), parsedTime.Weekday())
 
     return cron, nil
 }

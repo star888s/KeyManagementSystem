@@ -13,3 +13,4 @@ server/.terraform/*
 server/.terraform.lock.hcl
 */main_test.go
 _esc/
+server/lambda/create_schedule/cmd/volume/*
